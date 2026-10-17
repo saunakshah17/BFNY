@@ -1,0 +1,5 @@
+Put your game logo in this folder and name it exactly logo.png.
+Transparent PNG is recommended. The site preserves the aspect ratio.
+If there is no file, a built-in NY text logo appears.
+You can also upload a logo from Admin > Game & logo settings after deployment.
+An uploaded logo takes priority over this file.

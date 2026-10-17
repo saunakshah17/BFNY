@@ -1,0 +1,12 @@
+PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id=1), phase TEXT NOT NULL DEFAULT 'setup', logo TEXT);
+INSERT OR IGNORE INTO settings(id) VALUES(1);
+CREATE TABLE IF NOT EXISTS teams (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, color TEXT NOT NULL, password TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, adjustment INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, team_id TEXT, role TEXT NOT NULL, expires INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS login_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS venues (id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL, owner TEXT REFERENCES teams(id), status TEXT NOT NULL CHECK(status IN ('available','claimed','open','locked')), updated TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS attempts (id TEXT PRIMARY KEY, venue_id TEXT NOT NULL REFERENCES venues(id), team_id TEXT NOT NULL REFERENCES teams(id), kind TEXT NOT NULL CHECK(kind IN ('claim','steal')), status TEXT NOT NULL CHECK(status IN ('pending','completed','failed','vetoed','lost','void')), challenge INTEGER, photo TEXT, completion_photo TEXT, created TEXT NOT NULL, updated TEXT NOT NULL, UNIQUE(venue_id,team_id));
+CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, team_id TEXT, kind TEXT NOT NULL, mime TEXT NOT NULL, created TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS audit (id TEXT PRIMARY KEY, action TEXT NOT NULL, detail TEXT NOT NULL, created TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS attempts_recent ON attempts(created DESC);
+CREATE INDEX IF NOT EXISTS session_expiry ON sessions(expires);

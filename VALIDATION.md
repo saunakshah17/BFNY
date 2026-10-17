@@ -1,0 +1,20 @@
+# Validation notes
+
+Validated during preparation:
+
+- JavaScript syntax checks for frontend, Pages proxy and backend.
+- Seven integration tests exercising real backend handlers and the SQL schema through a Node SQLite D1 adapter.
+- Successful Worker dry-run compilation using Wrangler 4.151.1.
+- Successful Pages advanced-mode Worker compilation using Wrangler 4.151.1.
+- Numbered card assets 1–36 present, with titles 1–30 visually checked against the supplied images. Emoji-only titles have text search aliases.
+
+Tests cover: original claim and lock, no extra locking point, failed/vetoed claims, failed steals, simultaneous first claims, simultaneous steal completions, score conservation, one attempt per team/venue, challenge validation, duplicate outcome rejection, authentication, admin-only controls, same-origin request validation, private media, passcode reset, photo ownership, invalid image type, paused/ended games, admin corrections, score offsets, audit logging and photo moderation.
+
+Limits:
+
+- This is a prepared deployment package; it has not been deployed into the user's Cloudflare account.
+- Tests use an in-process Durable Object serialization adapter and in-memory R2 adapter; they do not replace an account-level Cloudflare smoke test.
+- Browser visual QA, real WebSocket reconnects, Google billing/key configuration and iPhone/Android camera integration have not been tested here. Run the rehearsal in SETUP.md after deployment.
+- HEIC conversion depends on browser decoding. JPEG/PNG, a screenshot, or the camera option are the supported fallbacks.
+- No offline submissions or background mobile notifications. An active browser tab receives live updates and has a 20-second refresh fallback.
+- One game per installation. Data is fetched as a small private-event snapshot, not as a large public-platform feed.
