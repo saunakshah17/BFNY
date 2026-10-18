@@ -6,7 +6,7 @@
   "preview_urls": false,
   "durable_objects": {"bindings":[{"name":"ROOM","class_name":"GameRoom"}]},
   "migrations": [{"tag":"v1","new_sqlite_classes":["GameRoom"]}],
-  "d1_databases":[{"binding":"DB","database_name":"bfny","database_id":"34fe53e2-2278-4dd4-af49-41f6df13be1e","migrations_dir":"../migrations"}],
+  "d1_databases":[{"binding":"DB","database_name":"battle-for-new-york","database_id":"34fe53e2-2278-4dd4-af49-41f6df13be1e","migrations_dir":"../migrations"}],
   "r2_buckets":[{"binding":"PHOTOS","bucket_name":"bfny-photos"}],
   "vars":{"GOOGLE_MAPS_BROWSER_KEY":"AIzaSyBJkgtjMvR2H9HSh05CFy9ol1jSELAW9aI"}
 }
