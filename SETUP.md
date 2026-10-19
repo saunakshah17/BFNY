@@ -174,7 +174,7 @@ Choose Git-connected or direct upload for the initial project; do not assume an 
 
 ## 7. Configure Google venue search
 
-The website uses Google's **Place Autocomplete (New)** widget with Place Details through the JavaScript library. It shows venue names/addresses; it links out to Google Maps for directions. It does not need a map canvas, Map ID, Directions API, Geocoding API, or device location permission.
+The website uses Google's **Place Autocomplete (New)** widget with Place Details through the JavaScript library. It shows venue names/addresses; it links out to Google Maps for directions. The scoreboard also uses a map canvas and Places locations to show claimed bars in team colors. It does not need a Map ID, Directions API, Geocoding API, or device location permission. Map loads and Places lookups may incur Google charges.
 
 In Google Cloud Console, open the project holding your API key:
 
@@ -239,7 +239,7 @@ Venue corrections supersede pending competing attempts. Correcting a failed atte
 
 **Adjust a score** sets a team's total manual offset; it does not add the entered value repeatedly. Example: entering `-1` means owned bars minus one; returning it to `0` removes the adjustment. A reason is required.
 
-The recent history section shows the last 100 actions/corrections; the database retains the full audit table. There is no destructive reset button. For a clean rehearsal, use a separate installation or undo test claims before the real game (history remains).
+The recent history section shows the last 100 actions/corrections; the database retains the full audit table. Use **Admin → Reset Game** for a clean rehearsal: type `RESET` to clear gameplay and sign everyone out while keeping teams, passcodes, colors and the logo. The audit history remains. **Teams → Remove** can delete an unused team or retire a team with history; see the game management section in README.md.
 
 ## 10. Test before the event
 

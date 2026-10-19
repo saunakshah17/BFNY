@@ -48,3 +48,13 @@ npm test
 The test suite exercises the actual backend handlers and SQL using Node's SQLite adapter and in-memory media storage. It covers claim races, competing steals, failed steals, score conservation, lock idempotency, permissions, CSRF, media access, passcode rotation, paused/ended gates and admin corrections. Wrangler 4.151.1 was used for packaging checks; see `VALIDATION.md` for limits.
 
 Do not edit the database directly during a live game; admin actions maintain the ownership/attempt relationships and emit live updates. The audit log records corrections, including the previous venue state. Use a separate installation for rehearsal if you want to keep a clean game history.
+
+## Scoreboard map and game management
+
+The scoreboard includes a live Google map between the leaderboard and searchable bar list. Pins use the current owner's team color and change when a steal completes. Tap a pin for status and directions; “Show all bars” restores the full view. Google Places resolves coordinates from saved place IDs, including existing bars. Coordinates stay in browser memory for that page session; no database migration is needed. Enable Maps JavaScript API and Places API (New), billing, and website/API restrictions for the browser key. Map loads and place lookups may incur Google charges. If Maps is unavailable, the bar list remains usable.
+
+Admin → Reset Game requires typing `RESET`. It returns the game to Setup and clears ownership, attempts, gameplay photo access, all sessions and manual score adjustments. It keeps teams, passcodes, colors, login-enabled settings, the logo and audit history. Everyone must sign in again. As with photo moderation, R2 photo bytes remain for recovery but are inaccessible through the app after their metadata is removed.
+
+Admin → Teams → Remove offers permanent deletion for teams without attempts, owned venues, uploaded media or score adjustments. Teams with gameplay history can be retired instead: sign-in is disabled and sessions are revoked while scores, bars and feed remain intact. Edit can enable sign-in again. Reset the game first if you need to permanently delete a test team with history.
+
+Deploy both the backend Worker and Pages for these changes; the existing database schema is unchanged.

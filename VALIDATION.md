@@ -3,12 +3,17 @@
 Validated during preparation:
 
 - JavaScript syntax checks for frontend, Pages proxy and backend.
-- Seven integration tests exercising real backend handlers and the SQL schema through a Node SQLite D1 adapter.
+- Nine integration tests exercising real backend handlers and the SQL schema through a Node SQLite D1 adapter.
 - Successful Worker dry-run compilation using Wrangler 4.151.1.
 - Successful Pages advanced-mode Worker compilation using Wrangler 4.151.1.
 - Numbered card assets 1–36 present, with titles 1–30 visually checked against the supplied images. Emoji-only titles have text search aliases.
 
 Tests cover: original claim and lock, no extra locking point, failed/vetoed claims, failed steals, simultaneous first claims, simultaneous steal completions, score conservation, one attempt per team/venue, challenge validation, duplicate outcome rejection, authentication, admin-only controls, same-origin request validation, private media, passcode reset, photo ownership, invalid image type, paused/ended games, admin corrections, score offsets, audit logging and photo moderation.
+
+Additional checks for map and game management:
+
+- Reset and team deletion/retirement integration tests cover admin permissions, confirmation, session revocation, preserved teams/logo, protected history and fresh gameplay after reset.
+- A mobile Chromium check with simulated Google Maps/Places responses verified coordinate lookup, pin color changes, preserved map view/filter, removed pins, headings, reset and retirement dialogs. This does not validate the real Google key, billing or referrer settings.
 
 Limits:
 

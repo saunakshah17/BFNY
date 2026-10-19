@@ -145,6 +145,32 @@ export class GameRoom {
     return data;
   }
   async admin(path,b){
+    if(path==='/api/admin/reset'){
+      check(b.confirmation==='RESET','Type RESET to confirm.');
+      await this.db.batch([
+        this.q('DELETE FROM attempts'),this.q('DELETE FROM venues'),
+        this.q("DELETE FROM media WHERE kind<>'logo'"),this.q('DELETE FROM sessions'),
+        this.q('DELETE FROM login_limits'),this.q('UPDATE teams SET adjustment=0'),
+        this.q("UPDATE settings SET phase='setup' WHERE id=1"),this.audit('game reset',{keptTeams:true})
+      ]);
+      for(const ws of this.ctx.getWebSockets())try{ws.close(4001,'Game reset. Sign in again.');}catch{}
+      return;
+    }
+    if(path==='/api/admin/remove-team'){
+      const t=await this.one('SELECT * FROM teams WHERE id=?',b.id);check(t,'Team not found.',404);
+      check(b.confirmation===t.name,'Type the team name to confirm.');
+      check(['delete','retire'].includes(b.action),'Choose delete or retire.');
+      if(b.action==='delete'){
+        const history=await this.one('SELECT id FROM attempts WHERE team_id=? LIMIT 1',t.id);
+        const owned=await this.one('SELECT id FROM venues WHERE owner=? LIMIT 1',t.id);
+        const media=await this.one('SELECT id FROM media WHERE team_id=? LIMIT 1',t.id);
+        check(!history&&!owned&&!media&&!t.adjustment,'This team has gameplay history. Retire it, or reset the game before deleting it.',409);
+      }
+      await this.db.batch([this.q('DELETE FROM sessions WHERE team_id=?',t.id),
+        b.action==='delete'?this.q('DELETE FROM teams WHERE id=?',t.id):this.q('UPDATE teams SET active=0 WHERE id=?',t.id),
+        this.audit(b.action==='delete'?'team deleted':'team retired',{id:t.id,name:t.name})]);
+      this.closeTeamSockets(t.id);return;
+    }
     if(path==='/api/admin/team'){
       check(text(b.name,60)&&/^#[0-9a-fA-F]{6}$/.test(b.color),'Provide a team name and colour.');
       check(!b.passcode||(typeof b.passcode==='string'&&b.passcode.length>=6&&b.passcode.length<=128),'Team passcodes must be 6–128 characters.');
