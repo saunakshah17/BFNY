@@ -1,10 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {GameRoom} from '../worker/index.js';
 class D1 {
- constructor(){this.db=new DatabaseSync(':memory:');this.db.exec(readFileSync(new URL('../migrations/0001_initial.sql',import.meta.url),'utf8'));}
+ constructor(){this.db=new DatabaseSync(':memory:');for(const file of readdirSync(new URL('../migrations/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())this.db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));}
  prepare(sql){const db=this.db;let args=[];return {bind(...a){args=a;return this;},async first(){return db.prepare(sql).get(...args)||null;},async all(){return {results:db.prepare(sql).all(...args)};},async run(){const r=db.prepare(sql).run(...args);return {success:true,meta:{changes:Number(r.changes)}};}};}
  async batch(stmts){this.db.exec('BEGIN');try{const results=[];for(const s of stmts)results.push(await s.run());this.db.exec('COMMIT');return results;}catch(e){this.db.exec('ROLLBACK');throw e;}}
 }
@@ -137,4 +137,49 @@ test('team deletion protects history; retirement revokes login and preserves own
  // An upload or manual score also counts as history, even before a claim.
  DB.db.prepare("INSERT INTO media VALUES('orphan',?,'photo','image/png',?)").run(c.id,new Date().toISOString());
  assert.equal((await remove(c)).status,409);
+});
+
+test('countdown is admin-only, persists across sessions, and supports independent controls',async()=>{
+ const {DB,req,admin,teams:[a]}=await setup();
+ const config={label:'The Final Stop',address:'123 Broadway, New York, NY',route:'R',seconds:7380};
+ const timer=(action,extra={},cookie=admin)=>req('admin/countdown',{action,...extra},cookie);
+ assert.equal((await timer('start',config,a.cookie)).status,403);
+ assert.equal((await req('admin/countdown',{action:'start',...config},admin,'https://evil.example')).status,403);
+ for(const extra of [{route:'X'},{seconds:0},{seconds:1.5},{label:''},{address:''},{seconds:604801}])assert.equal((await timer('start',{...config,...extra})).status,400);
+ assert.equal((await timer('pause')).status,409);
+ assert.equal((await timer('save',config)).status,200);
+ let st=(await req('state',null,a.cookie)).data;assert.equal(st.countdown.status,'idle');assert.equal(st.countdown.durationMs,7380000);assert.equal(st.settings.phase,'live');
+ assert.equal((await timer('start',config)).status,200);
+ st=(await req('state',null,a.cookie)).data;assert.equal(st.countdown.status,'running');assert.ok(st.countdown.endsAt-st.serverTime<=7380000&&st.countdown.endsAt-st.serverTime>7370000);
+ const originalEnd=st.countdown.endsAt;
+ await timer('save',{...config,label:'New destination',seconds:60});
+ st=(await req('state',null,admin)).data;assert.equal(st.countdown.endsAt,originalEnd);assert.equal(st.countdown.label,'New destination');
+ await req('admin/settings',{phase:'paused'},admin);
+ assert.equal((await req('state',null,a.cookie)).data.countdown.status,'running');
+ await timer('pause');st=(await req('state',null,a.cookie)).data;
+ assert.equal(st.countdown.status,'paused');assert.equal(st.countdown.endsAt,null);const remaining=st.countdown.remainingMs;
+ await timer('extend',{seconds:600});st=(await req('state',null,a.cookie)).data;assert.equal(st.countdown.remainingMs,remaining+600000);assert.equal(st.countdown.status,'paused');
+ await timer('resume');st=(await req('state',null,a.cookie)).data;assert.equal(st.countdown.status,'running');
+ assert.ok(st.countdown.endsAt-st.serverTime>remaining+590000);
+ await timer('extend',{seconds:60});st=(await req('state',null,a.cookie)).data;assert.ok(st.countdown.endsAt-st.serverTime>remaining+650000);
+ assert.equal((await timer('extend',{seconds:-1})).status,400);
+ const raw=JSON.parse(DB.db.prepare('SELECT countdown FROM settings WHERE id=1').get().countdown);raw.endsAt=Date.now()-1000;
+ DB.db.prepare('UPDATE settings SET countdown=? WHERE id=1').run(JSON.stringify(raw));
+ st=(await req('state',null,a.cookie)).data;assert.equal(st.settings.phase,'paused');assert.equal(st.countdown.status,'running');
+ await timer('cancel');assert.equal((await req('state',null,a.cookie)).data.countdown.status,'idle');
+ await timer('start',config);await req('admin/reset',{confirmation:'RESET'},admin);
+ assert.equal(DB.db.prepare('SELECT countdown FROM settings WHERE id=1').get().countdown,null);
+});
+
+test('activity includes actual claims and successful steals, without exposing admin audit details',async()=>{
+ const {req,admin,teams:[a,b],claim}=await setup();
+ const c=await claim(a);
+ await req('outcome',{id:c.data.id,status:'failed',challenge:1},a.cookie);
+ const steal=await claim(b);await req('outcome',{id:steal.data.id,status:'completed',challenge:2},b.cookie);
+ const st=(await req('state',null,a.cookie)).data;
+ assert.equal(st.activity.length,3);assert.equal(st.activity[0].action,'completed');assert.equal(st.activity[0].team,b.id);assert.equal(st.activity[0].previousOwner,a.id);
+ assert.equal(st.activity[1].action,'steal');assert.equal(st.activity[2].action,'claim');assert.equal(st.audit,undefined);
+ await req('admin/reset',{confirmation:'RESET'},admin);
+ const fresh=(await req('login',{admin:true,passcode:'Long-admin-secret-2026'})).cookie;
+ assert.deepEqual((await req('state',null,fresh)).data.activity,[]);
 });

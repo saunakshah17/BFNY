@@ -1,3 +1,4 @@
+import {TRAIN_ROUTES,countdownRemaining} from '../public/game-ui.js';
 import { CHALLENGES } from './challenges.js';
 const now = () => new Date().toISOString();
 const uid = () => crypto.randomUUID();
@@ -45,7 +46,7 @@ export class GameRoom {
     const url=new URL(req.url), path=url.pathname, method=req.method;
     if(method!=='GET' || path==='/api/live') check(req.headers.get('Origin')===url.origin,'Request origin not allowed.',403);
     if(path==='/api/bootstrap' && method==='GET'){
-      return json({teams:await this.all('SELECT id,name,color FROM teams WHERE active=1 ORDER BY name'),settings:await this.one('SELECT * FROM settings WHERE id=1')});
+      return json({teams:await this.all('SELECT id,name,color FROM teams WHERE active=1 ORDER BY name'),settings:await this.one('SELECT id,phase,logo FROM settings WHERE id=1')});
     }
     if(path==='/api/login' && method==='POST'){
       const b=await this.body(req);check(typeof b.passcode==='string' && b.passcode.length<=256,'Enter your passcode.');
@@ -136,7 +137,10 @@ export class GameRoom {
   }
   async photo(id,team){const m=await this.one("SELECT * FROM media WHERE id=? AND team_id=? AND kind='photo'",id||'',team);check(m,'Upload your team photo first.');}
   async snapshot(s){
-    const data={me:{role:s.role,id:s.team_id,name:s.team?.name||'Game admin'},settings:await this.one('SELECT * FROM settings WHERE id=1'),challenges:CHALLENGES,
+    const settings=await this.one('SELECT * FROM settings WHERE id=1');
+    const countdown=settings.countdown?JSON.parse(settings.countdown):null;delete settings.countdown;
+    const events=await this.all("SELECT * FROM audit WHERE action IN ('claim','steal','completed') AND rowid>COALESCE((SELECT MAX(rowid) FROM audit WHERE action='game reset'),0) ORDER BY rowid DESC LIMIT 20");
+    const data={serverTime:Date.now(),countdown,activity:events.map(e=>({id:e.id,action:e.action,...JSON.parse(e.detail)})),me:{role:s.role,id:s.team_id,name:s.team?.name||'Game admin'},settings,challenges:CHALLENGES,
       googleKey:this.env.GOOGLE_MAPS_BROWSER_KEY||'',
       teams:await this.all('SELECT t.id,t.name,t.color,t.active,t.adjustment,COUNT(v.id)+t.adjustment AS score FROM teams t LEFT JOIN venues v ON v.owner=t.id GROUP BY t.id ORDER BY score DESC,t.name'),
       venues:await this.all('SELECT * FROM venues ORDER BY updated DESC'),
@@ -145,13 +149,42 @@ export class GameRoom {
     return data;
   }
   async admin(path,b){
+    if(path==='/api/admin/countdown'){
+      const row=await this.one('SELECT countdown FROM settings WHERE id=1');
+      let timer=row.countdown?JSON.parse(row.countdown):null;
+      const time=Date.now();
+      if(b.action==='save'||b.action==='start'){
+        check(text(b.label,100)&&text(b.address,400)&&Object.hasOwn(TRAIN_ROUTES,b.route),'Enter a destination label, address and train route.');
+        check(Number.isInteger(b.seconds)&&b.seconds>0&&b.seconds<=604800,'Choose a duration from 1 second to 7 days.');
+        timer={...timer,label:b.label.trim(),address:b.address.trim(),route:b.route,durationMs:b.seconds*1000};
+        if(b.action==='start')timer={...timer,status:'running',endsAt:time+b.seconds*1000,remainingMs:b.seconds*1000};
+        else if(!timer.status||timer.status==='idle')timer={...timer,status:'idle',remainingMs:b.seconds*1000,endsAt:null};
+      }else{
+        check(timer,'Configure a countdown first.',409);
+        if(b.action==='pause'){
+          check(timer.status==='running','The countdown is not running.',409);
+          timer={...timer,status:'paused',remainingMs:countdownRemaining(timer,time),endsAt:null};
+        }else if(b.action==='resume'){
+          check(timer.status==='paused'&&timer.remainingMs>0,'There is no paused time to resume.',409);
+          timer={...timer,status:'running',endsAt:time+timer.remainingMs};
+        }else if(b.action==='extend'){
+          check(timer.status!=='idle','Start the countdown before extending it.',409);
+          check(Number.isInteger(b.seconds)&&b.seconds>0&&b.seconds<=604800,'Enter a positive extension up to 7 days.');
+          const remaining=countdownRemaining(timer,time)+b.seconds*1000;
+          check(remaining<=604800000,'The countdown cannot exceed 7 days.');
+          timer={...timer,remainingMs:remaining,endsAt:timer.status==='running'?time+remaining:null};
+        }else if(b.action==='cancel')timer={...timer,status:'idle',endsAt:null,remainingMs:timer.durationMs};
+        else throw new Problem('Unknown countdown action.');
+      }
+      await this.db.batch([this.q('UPDATE settings SET countdown=? WHERE id=1',JSON.stringify(timer)),this.audit('countdown '+b.action,{label:timer.label,route:timer.route})]);return;
+    }
     if(path==='/api/admin/reset'){
       check(b.confirmation==='RESET','Type RESET to confirm.');
       await this.db.batch([
         this.q('DELETE FROM attempts'),this.q('DELETE FROM venues'),
         this.q("DELETE FROM media WHERE kind<>'logo'"),this.q('DELETE FROM sessions'),
         this.q('DELETE FROM login_limits'),this.q('UPDATE teams SET adjustment=0'),
-        this.q("UPDATE settings SET phase='setup' WHERE id=1"),this.audit('game reset',{keptTeams:true})
+        this.q("UPDATE settings SET phase='setup',countdown=NULL WHERE id=1"),this.audit('game reset',{keptTeams:true})
       ]);
       for(const ws of this.ctx.getWebSockets())try{ws.close(4001,'Game reset. Sign in again.');}catch{}
       return;

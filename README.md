@@ -24,7 +24,7 @@ Mobile-first, dark-themed game website for Cloudflare Pages, with a Cloudflare W
 - Losing concurrent attempts become `lost` when someone locks the venue.
 - Teams must select a challenge for completed, failed and vetoed attempts.
 - Photos required for claims/steal starts, optional for outcomes.
-- Curses and timers stay outside the website.
+- Curses and individual challenge timers stay outside the website. The admin can run a separate game countdown.
 - Scores are calculated from current ownership, plus any explicit admin adjustment.
 - A shared rank is displayed for tied scores.
 
@@ -57,4 +57,19 @@ Admin → Reset Game requires typing `RESET`. It returns the game to Setup and c
 
 Admin → Teams → Remove offers permanent deletion for teams without attempts, owned venues, uploaded media or score adjustments. Teams with gameplay history can be retired instead: sign-in is disabled and sessions are revoked while scores, bars and feed remain intact. Edit can enable sign-in again. Reset the game first if you need to permanently delete a test team with history.
 
-Deploy both the backend Worker and Pages for these changes; the existing database schema is unchanged.
+Deploy both the backend Worker and Pages for these changes. The map and reset controls use the existing schema; the game countdown requires migration `0002_countdown.sql`.
+
+## Territory summaries, activity tape and final-stop countdown
+
+Tap a team in the leaderboard to show its owned bars on the map and in the list. The summary counts total owned bars, locked bars, bars open to steals and bars with a pending original challenge. Manual score adjustments do not count as territory. All Teams restores the full view. The scrolling activity tape uses actual claim, steal-start and completion events; a successful steal names the previous owner. Pause/Resume controls, hover/focus pausing and reduced-motion support let players read at their own pace.
+
+Admin → Countdown & final stop lets you enter hours/minutes/seconds, a destination label, an address and a subway route. Save destination prepares these details without starting; Start Countdown starts immediately, independently of game phase. The top of Play shows a subway arrival board with a synchronized HH:MM:SS clock. The address and Google Maps directions link sit underneath, outside the sign. It turns amber for the last ten minutes, stays at zero when finished and never ends the game automatically. Admin can pause, resume, extend, cancel, restart or edit the destination. Saving destination edits during a countdown leaves its current deadline unchanged; use Extend or Restart to change time. Reset Game clears the countdown as well as gameplay.
+
+Before deploying this update, apply the new D1 migration (using your existing Cloudflare account authentication):
+
+```sh
+npx wrangler@4.151.1 d1 migrations apply DB --remote --config worker/wrangler.jsonc
+npx wrangler@4.151.1 deploy --config worker/wrangler.jsonc
+```
+
+Then deploy Pages through your usual Git integration or Wrangler Pages deployment. Both frontend and backend updates are required. Migration 0002 preserves existing game data.
